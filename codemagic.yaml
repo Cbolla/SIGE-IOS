@@ -1,0 +1,48 @@
+# No Codemagic, cadastre a chave App Store Connect com o nome "codemagic".
+# Adicione em Code signing identities o certificado Apple Distribution e o
+# provisioning profile App Store para br.com.infinitysistem.varzea.
+workflows:
+  ios-release:
+    name: SIGE - App Store
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: br.com.infinitysistem.varzea
+      vars:
+        XCODE_WORKSPACE: SIGE.xcworkspace
+        XCODE_SCHEME: SIGE
+    scripts:
+      - name: Instalar dependencias CocoaPods
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          pod install --repo-update
+      - name: Configurar assinatura do aplicativo
+        script: xcode-project use-profiles
+      - name: Atualizar numero do build
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR"
+          # Numero crescente para os builds deste aplicativo no Codemagic.
+          agvtool new-version -all "$((BUILD_NUMBER + 1))"
+      - name: Gerar IPA para App Store
+        script: |
+          set -euo pipefail
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
